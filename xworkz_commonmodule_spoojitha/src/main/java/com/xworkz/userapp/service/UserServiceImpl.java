@@ -1,5 +1,6 @@
 package com.xworkz.userapp.service;
 
+import com.xworkz.userapp.constant.LocationEnum;
 import com.xworkz.userapp.dto.UserDto;
 import com.xworkz.userapp.entity.UserEntity;
 import com.xworkz.userapp.repository.UserRepository;
@@ -18,7 +19,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.time.LocalDateTime;
 import java.util.Properties;
 import java.util.Random;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -27,7 +27,6 @@ public class UserServiceImpl implements UserService {
     @Autowired
     UserRepository repository;
 
-    // Generates a random password
     public String generateRandomPassword() {
         String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         StringBuilder password = new StringBuilder();
@@ -38,51 +37,53 @@ public class UserServiceImpl implements UserService {
         return password.toString();
     }
 
+
     @Override
-    public boolean validateAndUser(UserDto dto, Model model) throws InvocationTargetException, IllegalAccessException {
-        boolean errors = false;
+    public boolean validateAndSaveUser(UserDto dto, String generatedPassword, Model model)
+            throws InvocationTargetException, IllegalAccessException {
 
         if (dto == null) {
             model.addAttribute("error", "User details cannot be null.");
+            log.error("User details are null.");
+            return false;
+        }
+        if (repository.findByName(dto.getName()) != null) {
+            model.addAttribute("nameError", "Username already taken!");
+            log.error("User with name '{}' already exists.", dto.getName());
             return false;
         }
 
-        String nameRegex = "^[A-Z][a-zA-Z ]{2,49}$";
-        Pattern namePattern = Pattern.compile(nameRegex);
-        if (dto.getName() == null || !namePattern.matcher(dto.getName()).matches()) {
-            model.addAttribute("nameError", "Invalid Name: Must start with an uppercase letter and contain only letters and spaces.");
-            errors = true;
-        }
-
-        String phoneRegex = "^[9876]\\d{9}$";
-        Pattern phonePattern = Pattern.compile(phoneRegex);
-        if (dto.getPhoneNumber() == null || !phonePattern.matcher(String.valueOf(dto.getPhoneNumber())).matches()) {
-            model.addAttribute("phoneError", "Invalid Phone Number");
-            errors = true;
-        }
-
-        String emailRegex = "^(?=.*[!@#$%^&*])[a-z0-9]+@gmail\\.com$";
-        Pattern emailPattern = Pattern.compile(emailRegex);
-        if (dto.getEmail() == null || !emailPattern.matcher(dto.getEmail()).matches()) {
-            model.addAttribute("emailError", "Invalid Email");
-            errors = true;
-
-        }
-
-        if (errors) {
+        if (repository.findByEmail(dto.getEmail()) != null) {
+            model.addAttribute("emailError", "Email is already registered!");
+            log.error("User with email '{}' already exists.", dto.getEmail());
             return false;
         }
 
-        // Generate, print, encrypt password
-        String generatedPassword = generateRandomPassword();
-        System.out.println("Generated Password for " + dto.getEmail() + " is: " + generatedPassword);
+        // Generate a password if not provided
+        if (generatedPassword == null || generatedPassword.isEmpty()) {
+            generatedPassword = generateRandomPassword();
+        }
+        log.info("Generated Password for {} is: {}", dto.getEmail(), generatedPassword);
 
+        // Convert DTO to Entity
         UserEntity entity = new UserEntity();
-        org.apache.commons.beanutils.BeanUtils.copyProperties(entity, dto);
+        BeanUtils.copyProperties(entity, dto);
         entity.setPassword(encryptPassword(generatedPassword));
         entity.setFailedAttempts(-1);
 
+        // Save user
         repository.saveUser(entity);
+        log.info("User {} saved successfully.", dto.getEmail());
+
+        // Send email notification
+        boolean emailSent = saveEmail(dto.getEmail(), generatedPassword);
+        if (emailSent) {
+            log.info("Email sent successfully to {}.", dto.getEmail());
+        } else {
+            log.error("Failed to send email to {}.", dto.getEmail());
+        }
+
+        model.addAttribute("successMessage", "Registration successful! Please check your email for login credentials.");
         return true;
     }
 
@@ -99,35 +100,26 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDto authenticateUser(String email, String password) {
         UserEntity userEntity = repository.findByEmail(email);
-
         if (userEntity == null) {
-//            System.out.println("User not found.");
             log.info("User not found");
             return null;
         }
 
-        // Check if account is locked
         if (userEntity.isAccountLocked()) {
             LocalDateTime lockedAt = userEntity.getLockTime();
             if (lockedAt != null && lockedAt.plusHours(24).isAfter(LocalDateTime.now())) {
-//                System.out.println("Account is still locked.");
                 log.info("Account is still locked.");
                 return null;
             } else {
-//                System.out.println("Unlocking account after 24 hours.");
                 log.info("Unlocking account after 24 hours.");
                 repository.resetAttempts(email);
             }
         }
 
-        // Check password
         if (!BCrypt.checkpw(password, userEntity.getPassword())) {
             int attempts = userEntity.getFailedAttempts() + 1;
-//            System.out.println("Failed login attempt count: " + attempts);
-            log.info("Failed login attempt count: " + attempts);
-
+            log.info("Failed login attempt count: {}", attempts);
             if (attempts >= 3) {
-//                System.out.println("Locking account...");
                 log.info("Locking account...");
                 repository.lockAccount(email, LocalDateTime.now());
             } else {
@@ -136,17 +128,17 @@ public class UserServiceImpl implements UserService {
             return null;
         }
         log.info("Resetting failed attempts on successful login");
-//        System.out.println("Resetting failed attempts on successful login.");
         repository.resetAttempts(email);
 
         UserDto userDto = new UserDto();
         try {
-            org.apache.commons.beanutils.BeanUtils.copyProperties(userDto, userEntity);
+            BeanUtils.copyProperties(userDto, userEntity);
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
         return userDto;
     }
+
 
     @Override
     public UserDto getUserByEmail(String email) {
@@ -181,7 +173,7 @@ public class UserServiceImpl implements UserService {
                 email,
                 dto.getName(),
                 String.valueOf(dto.getPhoneNumber()),
-                dto.getLocation(),
+                LocationEnum.valueOf(String.valueOf(dto.getLocation())),
                 dto.getAge(),
                 newPassword
         );
@@ -212,53 +204,53 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
-    @Override
-    public boolean saveUserWithPassword(UserDto dto, String password, Model model) {
-
-        // Check if email already exists
-        if (repository.findByEmail(dto.getEmail()) != null) {
-            model.addAttribute("error", "Email already registered!");
-            return false;
-        }
-
-        // Check if phone number already exists
-        if (repository.findByPhoneNumber(dto.getPhoneNumber()) != null) {
-            model.addAttribute("error", "Phone Number already registered!");
-            return false;
-        }
-
-        // Check if name already exists (Optional, depending on your business logic)
-        if (repository.findByName(dto.getName()) != null) {
-            model.addAttribute("error", "Username already taken!");
-            return false;
-        }
-
-        // Generate a random password
-        String generatedPassword = generateRandomPassword();
-        log.info("Generated Password for " + dto.getEmail() + " is: " + generatedPassword);
-
-        // Create and populate UserEntity
-        UserEntity entity = new UserEntity();
-        entity.setEmail(dto.getEmail());
-        entity.setName(dto.getName());
-        entity.setPassword(encryptPassword(generatedPassword));
-        entity.setPhoneNumber(dto.getPhoneNumber());
-        entity.setLocation(dto.getLocation());
-        entity.setAge(dto.getAge());
-        entity.setDOB(dto.getDOB());
-        entity.setGender(dto.getGender());
-        entity.setFailedAttempts(-1);
-
-        boolean saved=saveEmail(dto.getEmail(), generatedPassword);
-        if (saved){
-            log.info("Email sent Successfully");
-        }
-        // Save user in the repository
-        repository.saveUser(entity);
-
-        model.addAttribute("successMessage", "Registration successful! Please check your email for login credentials.");
-        return true;
-    }
+//    @Override
+//    public boolean saveUserWithPassword(UserDto dto, String password, Model model) {
+//
+//        // Check if email already exists
+//        if (repository.findByEmail(dto.getEmail()) != null) {
+//            model.addAttribute("error", "Email already registered!");
+//            return false;
+//        }
+//
+//        // Check if phone number already exists
+//        if (repository.findByPhoneNumber(dto.getPhoneNumber()) != null) {
+//            model.addAttribute("error", "Phone Number already registered!");
+//            return false;
+//        }
+//
+//        // Check if name already exists (Optional, depending on your business logic)
+//        if (repository.findByName(dto.getName()) != null) {
+//            model.addAttribute("error", "Username already taken!");
+//            return false;
+//        }
+//
+//        // Generate a random password
+//        String generatedPassword = generateRandomPassword();
+//        log.info("Generated Password for " + dto.getEmail() + " is: " + generatedPassword);
+//
+//        // Create and populate UserEntity
+//        UserEntity entity = new UserEntity();
+//        entity.setEmail(dto.getEmail());
+//        entity.setName(dto.getName());
+//        entity.setPassword(encryptPassword(generatedPassword));
+//        entity.setPhoneNumber(dto.getPhoneNumber());
+//        entity.setLocation(dto.getLocation());
+//        entity.setAge(dto.getAge());
+//        entity.setDOB(dto.getDOB());
+//        entity.setGender(dto.getGender());
+//        entity.setFailedAttempts(-1);
+//
+//        boolean saved=saveEmail(dto.getEmail(), generatedPassword);
+//        if (saved){
+//            log.info("Email sent Successfully");
+//        }
+//        // Save user in the repository
+//        repository.saveUser(entity);
+//
+//        model.addAttribute("successMessage", "Registration successful! Please check your email for login credentials.");
+//        return true;
+//    }
 
     public boolean saveEmail(String email, String genPwd) {
         final String username = "poojithaspoojithas1@gmail.com";

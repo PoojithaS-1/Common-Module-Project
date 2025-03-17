@@ -124,25 +124,27 @@
         <p class="error-message text-center">${error}</p>
     </c:if>
 
-    <form action="signIn" method="post">
-        <div class="mb-3">
-            <label for="email">Email:</label>
-            <input type="text" id="email" name="email" class="form-control" value="${param.email}" required>
-            <c:if test="${not empty emailError}">
-                <p class="error-message">${emailError}</p>
-            </c:if>
-        </div>
-        <div class="mb-3">
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" class="form-control" required>
-            <c:if test="${not empty passwordError}">
-                <p class="error-message">${passwordError}</p>
-            </c:if>
-        </div>
-        <div class="text-center">
-            <input type="submit" value="SIGN IN" class="btn btn-primary w-100">
-        </div>
-    </form>
+<form action="signIn" method="post">
+    <div class="mb-3">
+        <label for="email">Email:</label>
+        <input type="text" id="email" name="email" class="form-control" value="${param.email}" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" class="form-control" required>
+    </div>
+
+    <!-- CAPTCHA Display -->
+    <div class="mb-3 text-center">
+        <label for="captcha">Enter CAPTCHA: <strong>${sessionScope.captcha}</strong></label>
+        <input type="text" id="captcha" name="captcha" class="form-control" required>
+    </div>
+
+    <div class="text-center">
+        <input type="submit" value="SIGN IN" class="btn btn-primary w-100">
+    </div>
+</form>
 
 <!-- Register Link -->
         <a href="signup.jsp" class="register-link">Don't have an account? Register here</a>

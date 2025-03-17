@@ -49,18 +49,18 @@
             background-color: #007bff;
             border: none;
         }
+
         .navbar {
-                    width: 100%;
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    z-index: 1000;
-                }
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+        }
 
-                .navbar-brand img {
-                    height: 50px;
-                }
-
+        .navbar-brand img {
+            height: 50px;
+        }
 
         .btn-primary:hover {
             background-color: #0056b3;
@@ -68,6 +68,11 @@
     </style>
 </head>
 <body>
+
+<%-- Retrieve logged-in user from session --%>
+<c:set var="loggedInUser" value="${sessionScope.loggedInUser}" />
+
+
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
     <div class="container-fluid">
@@ -82,7 +87,6 @@
                 <li class="nav-item">
                     <a class="nav-link" href="index.jsp">Home</a>
                 </li>
-
                 <li class="nav-item">
                     <a class="nav-link" href="signin.jsp">SignIn</a>
                 </li>
@@ -91,66 +95,61 @@
     </div>
 </nav>
 
-
 <div class="container mt-5">
     <div class="form-container">
         <h2 class="text-center">Update Profile</h2>
 
-
+        <%-- Success & Error Messages --%>
         <c:if test="${not empty successMessage}">
-            <p class="success-message">${successMessage}</p>
+            <div class="alert alert-success">${successMessage}</div>
         </c:if>
         <c:if test="${not empty error}">
-            <p class="error-message">${error}</p>
+            <div class="alert alert-danger">${error}</div>
         </c:if>
 
         <form action="updateUser" method="post">
+            <%-- Email (Hidden) --%>
             <input type="hidden" name="email" value="${loggedInUser.email}" />
 
+            <%-- Name Field --%>
             <div class="mb-3">
                 <label>Name:</label>
                 <input type="text" name="name" class="form-control" value="${loggedInUser.name}" required />
             </div>
 
+            <%-- Phone Number Field --%>
             <div class="mb-3">
                 <label>Phone:</label>
                 <input type="text" name="phoneNumber" class="form-control" value="${loggedInUser.phoneNumber}" required />
             </div>
 
+            <%-- Location Dropdown (Dynamically Generated) --%>
             <div class="mb-3">
                 <label>Location:</label>
+                <c:set var="userLocation" value="${loggedInUser.location}" />
                 <select name="location" class="form-control" required>
-                 <option value="" disabled selected>Select Location</option>
-                   <option value="BANGALORE" ${loggedInUser.location == 'BANGALORE' ? 'selected' : ''}>Bangalore</option>
-                                   <option value="MUMBAI" ${loggedInUser.location == 'MUMBAI' ? 'selected' : ''}>Mumbai</option>
-                                   <option value="DELHI" ${loggedInUser.location == 'DELHI' ? 'selected' : ''}>Delhi</option>
-                                   <option value="CHENNAI" ${loggedInUser.location == 'CHENNAI' ? 'selected' : ''}>Chennai</option>
-                                   <option value="HYDERABAD" ${loggedInUser.location == 'HYDERABAD' ? 'selected' : ''}>Hyderabad</option>
-                                   <option value="PUNE" ${loggedInUser.location == 'PUNE' ? 'selected' : ''}>Pune</option>
-                                    <option value="KOLKATA" ${loggedInUser.location == 'KOLKATA' ? 'selected' : ''}>Kolkata</option>                                   <option value="AHMEDABAD" ${loggedInUser.location == 'AHMEDABAD' ? 'selected' : ''}>Ahmedabad</option>
-                                   <option value="JAIPUR" ${loggedInUser.location == 'JAIPUR' ? 'selected' : ''}>Jaipur</option>
-                                   <option value="CHANDIGARH" ${loggedInUser.location == 'CHANDIGARH' ? 'selected' : ''}>Chandigarh</option>
-                                   <option value="LUCKNOW" ${loggedInUser.location == 'LUCKNOW' ? 'selected' : ''}>Lucknow</option>
-                                   <option value="COIMBATORE" ${loggedInUser.location == 'COIMBATORE' ? 'selected' : ''}>Coimbatore</option>
-                                   <option value="KOCHI" ${loggedInUser.location == 'KOCHI' ? 'selected' : ''}>Kochi</option>
+                    <option value="" disabled>Select Location</option>
+                    <c:forEach var="loc" items="${['BANGALORE', 'MUMBAI', 'DELHI', 'CHENNAI', 'HYDERABAD', 'PUNE', 'KOLKATA', 'AHMEDABAD', 'JAIPUR', 'CHANDIGARH', 'LUCKNOW', 'COIMBATORE', 'KOCHI']}">
+                        <option value="${loc}" <c:if test="${userLocation == loc}">selected</c:if>>${loc}</option>
+                    </c:forEach>
                 </select>
             </div>
 
+            <%-- Age Field --%>
             <div class="mb-3">
                 <label>Age:</label>
-                <input type="number" name="age" class="form-control" value="${loggedInUser.age}" />
+                <input type="number" name="age" class="form-control" value="${loggedInUser.age}" required />
             </div>
 
-            <div class="mb-3">
-                <label>New Password:</label>
-                <input type="password" name="password" class="form-control" />
-            </div>
 
+
+            <%-- Submit Button --%>
             <div class="text-center">
                 <input type="submit" value="Update Profile" class="btn btn-primary">
             </div>
         </form>
     </div>
 </div>
+
 </body>
 </html>
